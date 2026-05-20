@@ -107,7 +107,7 @@ class CCMPredEncoder(object):
         '''
         df = pd.DataFrame(iter(s) for s in sequences)
         encoding = df.replace(letter_to_index_dict)
-        encoding = encoding.values.astype(np.int)
+        encoding = encoding.values.astype(int)
         return encoding
 
     def ccmpred_encoding(self, index_encoded, profile='pair'):

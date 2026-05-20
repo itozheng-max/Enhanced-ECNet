@@ -7,7 +7,6 @@ from sklearn.model_selection import KFold, ShuffleSplit
 
 from ecnet import vocab
 from ecnet.local_feature import CCMPredEncoder
-from ecnet.global_feature import TAPEEncoder
 
 
 class SequenceData(torch.utils.data.Dataset):
@@ -46,7 +45,7 @@ def index_encoding(sequences):
     '''
     df = pd.DataFrame(iter(s) for s in sequences)
     encoding = df.replace(vocab.AMINO_ACID_INDEX)
-    encoding = encoding.values.astype(np.int)
+    encoding = encoding.values.astype(int)
     return encoding
 
 
@@ -102,6 +101,7 @@ class Dataset(object):
             self.ccmpred_encoder = CCMPredEncoder(
                 ccmpred_output=ccmpred_output, seq_len=len(self.native_sequence))
         if self.use_glob_feat:
+            from ecnet.global_feature import TAPEEncoder
             self.tape_encoder = TAPEEncoder()
 
     def _read_native_sequence(self):
@@ -203,7 +203,7 @@ class Dataset(object):
 
     def encode_seq_enc(self, sequences):
         seq_enc = index_encoding(sequences)
-        seq_enc = torch.from_numpy(seq_enc.astype(np.int))
+        seq_enc = torch.from_numpy(seq_enc.astype(int))
         return seq_enc
 
     def encode_loc_feat(self, sequences):
