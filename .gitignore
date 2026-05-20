@@ -131,5 +131,9 @@ dmypy.json
 # ignore example data
 data/*.braw
 data.tar.gz
+data/RRM_wt_23790/
+data/distance_matrix.npy
+data/RRM_wt_only.fasta
 output/
 dev/
+.claude/

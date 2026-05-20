@@ -4,6 +4,7 @@ import pandas as pd
 import msgpack
 import numba
 from ecnet import vocab
+from ecnet.spatial_mask import SpatialMask
 
 @numba.njit
 def all_sequence_pairwise_profile(args):
@@ -55,15 +56,31 @@ def all_sequence_singleton_profile(args):
     return encoding
 
 class CCMPredEncoder(object):
-    def __init__(self, ccmpred_output=None, seq_len=None):
+    def __init__(self, ccmpred_output=None, seq_len=None, spatial_mask=None):
         '''
-        brawfile: path to msgpack file storing the (L, L, 21, 21) table of
-                  CCMPred epsilon values of a target sequence
+        ccmpred_output: path to msgpack file storing the (L, L, 21, 21) table of
+                        CCMPred epsilon values of a target sequence
+        spatial_mask: SpatialMask instance or path to distance matrix .npy
         '''
         self.seq_len = seq_len
         self.vocab_index = vocab.CCMPRED_AMINO_ACID_INDEX
         brawfile = pathlib.Path(ccmpred_output)
         self.eij, self.ei = self.load_data(brawfile)
+
+        if spatial_mask is not None:
+            if isinstance(spatial_mask, str):
+                D = np.load(spatial_mask)
+                spatial_mask = SpatialMask(D)
+            elif isinstance(spatial_mask, dict):
+                D = np.load(spatial_mask['path'])
+                spatial_mask = SpatialMask(D,
+                    d0=spatial_mask.get('d0', 8.0),
+                    gamma=spatial_mask.get('gamma', 1.5),
+                    mode=spatial_mask.get('mode', 'multiply'),
+                    epsilon=spatial_mask.get('epsilon', 0.05),
+                    alpha=spatial_mask.get('alpha', 1.0))
+            self.eij = spatial_mask.apply_to_eij(self.eij)
+            self.spatial_mask = spatial_mask
 
     def load_data(self, brawfile):
         '''
@@ -83,11 +100,11 @@ class CCMPredEncoder(object):
         eij = np.zeros((L, L, V, V))
         for i in range(L - 1):
             for j in range(i + 1, L):
-                arr = np.array(data[b'x_pair'][b'%d/%d'%(i, j)][b'x']).reshape(V, V)
+                arr = np.array(data['x_pair']['%d/%d'%(i, j)]['x']).reshape(V, V)
                 eij[i, j] = arr
                 eij[j, i] = arr.T
 
-        ei = np.array(data[b'x_single']).reshape(L, V - 1)
+        ei = np.array(data['x_single']).reshape(L, V - 1)
 
         return eij, ei
 

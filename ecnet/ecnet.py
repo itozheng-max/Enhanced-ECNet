@@ -26,18 +26,22 @@ class ECNet(object):
             random_seed=42,
             nn_name='lstm', n_ensembles=1,
             d_embed=20, d_model=128, d_h=128, nlayers=1,
-            batch_size=128, save_log=False):
+            batch_size=128, save_log=False,
+            spatial_mask=None, physics_pdb=None):
 
         self.dataset = Dataset(
             train_tsv=train_tsv, test_tsv=test_tsv,
             fasta=fasta, ccmpred_output=ccmpred_output,
             use_loc_feat=use_loc_feat, use_glob_feat=use_glob_feat,
             split_ratio=split_ratio,
-            random_seed=random_seed)
+            random_seed=random_seed,
+            spatial_mask=spatial_mask,
+            physics_pdb=physics_pdb)
         self.saver = Saver(output_dir=output_dir)
         self.logger = Logger(logfile=self.saver.save_dir/'exp.log' if save_log else None)
         self.use_loc_feat = use_loc_feat
         self.use_glob_feat = use_glob_feat
+        self.use_physics = self.dataset.use_physics
         vocab_size = len(vocab.AMINO_ACIDS)
         seq_len = len(self.dataset.native_sequence)
         proj_loc_config = {
@@ -58,7 +62,8 @@ class ECNet(object):
                 vocab_size=vocab_size, seq_len=seq_len,
                 bidirectional=True if nn_name == 'blstm' else False,
                 use_loc_feat=use_loc_feat, use_glob_feat=use_glob_feat,
-                proj_loc_config=proj_loc_config, proj_glob_config=proj_glob_config
+                proj_loc_config=proj_loc_config, proj_glob_config=proj_glob_config,
+                use_physics=self.use_physics, physics_dim=6
             ).to(self.device) for _ in range(n_ensembles)]
         else:
             raise NotImplementedError
@@ -155,9 +160,14 @@ class ECNet(object):
                             glob_feat = batch['glob_feat'].to(self.device)
                         else:
                             glob_feat = None
+                        if self.use_physics:
+                            physics_feat = batch['physics_feat'].to(self.device)
+                        else:
+                            physics_feat = None
 
                         optimizer.zero_grad()
-                        output = model(X, glob_feat=glob_feat, loc_feat=loc_feat)
+                        output = model(X, glob_feat=glob_feat, loc_feat=loc_feat,
+                                      physics_feat=physics_feat)
                         output = output.view(-1)
                         loss = self.criterion(output, y)
 
@@ -244,8 +254,13 @@ class ECNet(object):
                         glob_feat = batch['glob_feat'].to(self.device)
                     else:
                         glob_feat = None
+                    if self.use_physics:
+                        physics_feat = batch['physics_feat'].to(self.device)
+                    else:
+                        physics_feat = None
 
-                    output = model(X, glob_feat=glob_feat, loc_feat=loc_feat)
+                    output = model(X, glob_feat=glob_feat, loc_feat=loc_feat,
+                                  physics_feat=physics_feat)
                     output = output.view(-1)
                     if calc_loss:
                         y = batch['label'].to(self.device)

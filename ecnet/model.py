@@ -124,8 +124,11 @@ class LSTMPredictor(nn.Module):
                 vocab_size=None, seq_len=None,
                 dropout=0.1, lstm_dropout=0, nlayers=1, bidirectional=False,
                 use_loc_feat=True, use_glob_feat=True,
-                proj_loc_config=None, proj_glob_config=None):
+                proj_loc_config=None, proj_glob_config=None,
+                use_physics=False, physics_dim=6):
         super(LSTMPredictor, self).__init__()
+        self.use_physics = use_physics
+        self.physics_dim = physics_dim
         self.seq_lstm = SequenceLSTM(
             d_input=d_embed + (proj_loc_config['d_out'] if use_loc_feat else 0),
             d_embed=d_embed, d_model=d_model,
@@ -136,18 +139,25 @@ class LSTMPredictor(nn.Module):
         self.proj_glob_layer = proj_glob_config['layer'](
             proj_glob_config['d_in'], proj_glob_config['d_out']
         )
-        self.aggragator = AggregateLayer(
-            d_model = d_model + (proj_glob_config['d_out'] if use_glob_feat else 0))
+        agg_dim = d_model + (proj_glob_config['d_out'] if use_glob_feat else 0)
+        if use_physics:
+            self.physics_proj = nn.Linear(physics_dim, physics_dim)
+        else:
+            self.physics_proj = None
+        self.aggragator = AggregateLayer(d_model=agg_dim)
+        predictor_dim = agg_dim + (physics_dim if use_physics else 0)
         self.predictor = GlobalPredictor(
-            d_model = d_model + (proj_glob_config['d_out'] if use_glob_feat else 0),
-            d_h=d_h, d_out=d_out)
+            d_model=predictor_dim, d_h=d_h, d_out=d_out)
 
-    def forward(self, x, glob_feat=None, loc_feat=None):
+    def forward(self, x, glob_feat=None, loc_feat=None, physics_feat=None):
         x = self.seq_lstm(x, loc_feat=loc_feat)
         if glob_feat is not None:
             glob_feat = self.proj_glob_layer(glob_feat)
             x = torch.cat([x, glob_feat], dim=2)
         x = self.aggragator(x)
+        if self.use_physics and physics_feat is not None:
+            p = self.physics_proj(physics_feat)
+            x = torch.cat([x, p], dim=1)
         output = self.predictor(x)
         return output
 

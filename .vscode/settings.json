@@ -1,5 +1,8 @@
 {
     "python.testing.pytestEnabled": false,
     "python.testing.unittestEnabled": false,
-    "python.analysis.extraPaths": ["${workspaceFolder}"]
+    "python.analysis.extraPaths": ["${workspaceFolder}"],
+    "terminal.integrated.env.windows": {
+        "PYTHONPATH": "${workspaceFolder}"
+    }
 }

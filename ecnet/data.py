@@ -7,6 +7,7 @@ from sklearn.model_selection import KFold, ShuffleSplit
 
 from ecnet import vocab
 from ecnet.local_feature import CCMPredEncoder
+from ecnet.physics_features import PhysicsFeatures
 
 
 class SequenceData(torch.utils.data.Dataset):
@@ -55,9 +56,13 @@ class Dataset(object):
             fasta=None, ccmpred_output=None,
             use_loc_feat=True, use_glob_feat=True,
             split_ratio=[0.9, 0.1],
-            random_seed=42):
+            random_seed=42,
+            spatial_mask=None,
+            physics_pdb=None):
         """
         split_ratio: [train, valid] or [train, valid, test]
+        spatial_mask: path to .npy distance matrix for CASP 8A sigmoid mask
+        physics_pdb: path to PDB file for physics proxy features
         """
 
         self.train_tsv = train_tsv
@@ -69,6 +74,12 @@ class Dataset(object):
         self.rng = np.random.RandomState(random_seed)
 
         self.native_sequence = self._read_native_sequence()
+
+        self.use_physics = physics_pdb is not None
+        self.physics_feat_vec = None
+        if self.use_physics:
+            self.physics_feat_vec = self._compute_physics_features(physics_pdb)
+
         if train_tsv is not None:
             self.full_df = self._read_mutation_df(train_tsv)
         else:
@@ -99,7 +110,8 @@ class Dataset(object):
 
         if self.use_loc_feat:
             self.ccmpred_encoder = CCMPredEncoder(
-                ccmpred_output=ccmpred_output, seq_len=len(self.native_sequence))
+                ccmpred_output=ccmpred_output, seq_len=len(self.native_sequence),
+                spatial_mask=spatial_mask)
         if self.use_glob_feat:
             from ecnet.global_feature import TAPEEncoder
             self.tape_encoder = TAPEEncoder()
@@ -108,6 +120,28 @@ class Dataset(object):
         fasta = SeqIO.read(self.fasta, 'fasta')
         native_sequence = str(fasta.seq)
         return native_sequence
+
+    def _compute_physics_features(self, pdb_path):
+        from Bio.PDB import PDBParser
+        AA3 = {'ALA':'A','CYS':'C','ASP':'D','GLU':'E','PHE':'F',
+               'GLY':'G','HIS':'H','ILE':'I','LYS':'K','LEU':'L',
+               'MET':'M','ASN':'N','PRO':'P','GLN':'Q','ARG':'R',
+               'SER':'S','THR':'T','VAL':'V','TRP':'W','TYR':'Y'}
+        parser = PDBParser(QUIET=True)
+        structure = parser.get_structure('phys', pdb_path)
+        chain = list(structure[0].get_chains())[0]
+        coords = []
+        for res in chain:
+            aa = AA3.get(res.resname, 'X')
+            if aa == 'X':
+                continue
+            if res.resname == 'GLY' or 'CB' not in res:
+                coords.append(res['CA'].get_coord())
+            else:
+                coords.append(res['CB'].get_coord())
+        coords = np.array(coords)
+        feat = PhysicsFeatures(coords, self.native_sequence)
+        return torch.from_numpy(feat.feature_vector).float()
 
 
     def _check_split_ratio(self, split_ratio):
@@ -247,6 +281,8 @@ class Dataset(object):
                 sample['loc_feat'] = loc_feat[i]
             if self.use_glob_feat:
                 sample['glob_feat'] = glob_feat[i]
+            if self.use_physics:
+                sample['physics_feat'] = self.physics_feat_vec
             samples.append(sample)
         data = MetagenesisData(samples)
         if return_df:

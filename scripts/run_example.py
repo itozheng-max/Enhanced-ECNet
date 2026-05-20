@@ -12,9 +12,11 @@ def main():
         use_glob_feat=(not args.no_global_feature),
         split_ratio=args.split_ratio,
         n_ensembles=args.n_ensembles,
-        d_embed=args.d_embed, d_model=args.d_model, 
+        d_embed=args.d_embed, d_model=args.d_model,
         d_h=args.d_h, nlayers=args.n_layers,
-        batch_size=args.batch_size, save_log=args.save_log
+        batch_size=args.batch_size, save_log=args.save_log,
+        spatial_mask=args.spatial_mask,
+        physics_pdb=args.physics_pdb
     )
     if args.saved_model_dir:
         ecnet.load_checkpoint(args.saved_model_dir)
@@ -38,6 +40,8 @@ if __name__ == "__main__":
     parser.add_argument('--test', action='store', help='test data (TSV format)')
     parser.add_argument('--fasta', action='store', required=True, help='native sequence (FASTA format)')
     parser.add_argument('--local_feature', action='store', help='precomputed CCMPred feature (binary format)')
+    parser.add_argument('--spatial_mask', action='store', help='distance matrix .npy for CASP 8A spatial mask')
+    parser.add_argument('--physics_pdb', action='store', help='PDB file for physics proxy features')
 
     parser.add_argument('--n_ensembles', action='store', type=int, default=3, help='number of models in ensemble')
     parser.add_argument('--split_ratio', action='store', type=float, nargs='+', default=[0.7, 0.1, 0.2],
