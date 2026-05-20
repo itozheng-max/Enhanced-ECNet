@@ -3,26 +3,24 @@ import numpy as np
 class SpatialMask:
     """Apply 3D spatial distance mask to CCMPred coupling parameters.
 
-    Uses the CASP-standard Cβ-Cβ distance threshold of 8.0Å to distinguish
-    true residue contacts from phylogenetic noise in coevolution signals.
+    Kernel formulas:
+        sigmoid:  W(d) = 1 / (1 + exp(gamma * (d - d0)))
+        hill:     W(d) = 1 / (1 + (d / d0)^n)
 
-    Mask formula (sigmoid):
-        W(d_ij) = 1 / (1 + exp(gamma * (d_ij - d0)))
-
-    Where:
-        d_ij = Cβ-Cβ distance (Cα for GLY) in Angstrom
-        d0   = 8.0 Å (CASP gold standard for residue contact)
-        gamma = 1.5 (steepness, gives W≈0.95 at d=6Å, W=0.5 at d=8Å, W≈0.05 at d=10Å)
+    d_ij = Cβ-Cβ distance (Cα for GLY) in Angstrom
+    d0   = 8.0 Å (CASP gold standard, LOCK this for Cβ)
     """
 
     def __init__(self, distance_matrix, d0=8.0, gamma=1.5, mode='multiply', epsilon=0.05,
-                 alpha=1.0):
+                 alpha=1.0, kernel='sigmoid', n=4):
         self.D = np.asarray(distance_matrix, dtype=np.float32)
         self.d0 = d0
         self.gamma = gamma
         self.mode = mode
         self.epsilon = epsilon
         self.alpha = alpha
+        self.kernel = kernel
+        self.n = n
         self._mask = None
 
     @property
@@ -32,7 +30,10 @@ class SpatialMask:
         return self._mask
 
     def _compute(self):
-        W = 1.0 / (1.0 + np.exp(self.gamma * (self.D - self.d0)))
+        if self.kernel == 'hill':
+            W = 1.0 / (1.0 + (self.D / self.d0) ** self.n)
+        else:
+            W = 1.0 / (1.0 + np.exp(self.gamma * (self.D - self.d0)))
         np.fill_diagonal(W, 0.0)
         return W.astype(np.float32)
 

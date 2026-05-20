@@ -78,7 +78,9 @@ class CCMPredEncoder(object):
                     gamma=spatial_mask.get('gamma', 1.5),
                     mode=spatial_mask.get('mode', 'multiply'),
                     epsilon=spatial_mask.get('epsilon', 0.05),
-                    alpha=spatial_mask.get('alpha', 1.0))
+                    alpha=spatial_mask.get('alpha', 1.0),
+                    kernel=spatial_mask.get('kernel', 'sigmoid'),
+                    n=spatial_mask.get('n', 4))
             self.eij = spatial_mask.apply_to_eij(self.eij)
             self.spatial_mask = spatial_mask
 
